@@ -1,109 +1,125 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useRef, useEffect } from "react"
-import { MessageCircle, X, Send } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import Image from "next/image"
+import type React from "react";
+import { useState, useRef, useEffect } from "react";
+import { MessageCircle, X, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import Image from "next/image";
 
 interface ChatMessage {
-  sender: string
-  message: string
-  isAnimating?: boolean
+  sender: string;
+  message: string;
+  isAnimating?: boolean;
+  audio?: string;
 }
 
 export function ChatButton() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [typingText, setTypingText] = useState("Thinking")
+  const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [typingText, setTypingText] = useState("Thinking");
 
-  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  // Typing animation for "Thinking..."
   useEffect(() => {
-    if (!isLoading) return
+    if (!isLoading) return;
 
     const interval = setInterval(() => {
       setTypingText((prev) => {
-        if (prev === "Thinking...") return "Thinking"
-        return prev + "."
-      })
-    }, 500)
+        if (prev === "Thinking...") return "Thinking";
+        return prev + ".";
+      });
+    }, 500);
 
-    return () => clearInterval(interval)
-  }, [isLoading])
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
-  // Text reveal animation for AI messages
   const animateText = (index: number) => {
-    if (messages[index]?.sender !== "ai") return
+    if (messages[index]?.sender !== "ai") return;
 
-    const message = messages[index].message
-    let currentChar = 0
-    const animationSpeed = 30 // ms per character
+    const message = messages[index].message;
+    let currentChar = 0;
+    const animationSpeed = 30;
 
-    // Mark this message as currently animating
     setMessages((prev) => {
-      const updated = [...prev]
-      updated[index] = { ...updated[index], isAnimating: true }
-      return updated
-    })
+      const updated = [...prev];
+      updated[index] = { ...updated[index], isAnimating: true };
+      return updated;
+    });
 
     const interval = setInterval(() => {
-      currentChar++
-
+      currentChar++;
       if (currentChar >= message.length) {
-        clearInterval(interval)
-        // Animation complete
+        clearInterval(interval);
         setMessages((prev) => {
-          const updated = [...prev]
-          updated[index] = { ...updated[index], isAnimating: false }
-          return updated
-        })
+          const updated = [...prev];
+          updated[index] = { ...updated[index], isAnimating: false };
+          return updated;
+        });
       }
-    }, animationSpeed)
-  }
+    }, animationSpeed);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim()) return
+    e.preventDefault();
+    if (!input.trim()) return;
 
-    const userMessage = { sender: "user", message: input }
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
+    const userMessage = { sender: "user", message: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
     try {
       const res = await fetch("/api/ollama", {
         method: "POST",
         body: JSON.stringify({ prompt: input }),
         headers: { "Content-Type": "application/json" },
-      })
+      });
 
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
-      const data = await res.json()
-      const aiMessage = { sender: "ai", message: data.response || "No response" }
+      const data = await res.json();
+
+      const aiMessage: ChatMessage = {
+        sender: "ai",
+        message: data.response || "No response",
+        audio: data.audio || null,
+      };
 
       setMessages((prev) => {
-        const newMessages = [...prev, aiMessage]
-        setTimeout(() => animateText(newMessages.length - 1), 100)
-        return newMessages
-      })
+        const newMessages = [...prev, aiMessage];
+        setTimeout(() => animateText(newMessages.length - 1), 100);
+
+        if (aiMessage.audio) {
+          const audio = new Audio(aiMessage.audio);
+          audio.play().catch((err) =>
+            console.error("Audio autoplay failed:", err)
+          );
+        }
+
+        return newMessages;
+      });
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error"
-      setMessages((prev) => [...prev, { sender: "ai", message: `Error: ${errMsg}` }])
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      setMessages((prev) => [
+        ...prev,
+        { sender: "ai", message: `Error: ${errMsg}` },
+      ]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <>
@@ -129,7 +145,9 @@ export function ChatButton() {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <DialogTitle className="text-2xl font-bold">LIL BAH AI</DialogTitle>
+                <DialogTitle className="text-2xl font-bold">
+                  LIL BAH AI
+                </DialogTitle>
               </div>
               <Button
                 variant="ghost"
@@ -152,11 +170,15 @@ export function ChatButton() {
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"} animate-message-appear`}
+                  className={`flex ${
+                    msg.sender === "user" ? "justify-end" : "justify-start"
+                  } animate-message-appear`}
                 >
                   <div
                     className={`whitespace-pre-line max-w-[80%] p-3 rounded-2xl ${
-                      msg.sender === "user" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-800"
+                      msg.sender === "user"
+                        ? "bg-blue-500 text-white"
+                        : "bg-gray-100 text-gray-800"
                     } ${msg.isAnimating ? "animate-pulse" : ""}`}
                   >
                     {msg.message}
@@ -167,7 +189,9 @@ export function ChatButton() {
               {isLoading && (
                 <div className="flex justify-start animate-message-appear">
                   <div className="p-3 rounded-2xl bg-gray-100">
-                    <span className="inline-block animate-typing">{typingText}</span>
+                    <span className="inline-block animate-typing">
+                      {typingText}
+                    </span>
                   </div>
                 </div>
               )}
@@ -200,5 +224,5 @@ export function ChatButton() {
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }
